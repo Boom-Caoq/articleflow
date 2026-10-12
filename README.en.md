@@ -2,32 +2,89 @@
 
 [简体中文](README.md) · **English**
 
-ArticleFlow is a local-first content workflow for discovering AI industry articles, rewriting and reviewing them with an LLM, and publishing approved results to WordPress. It also discovers AI products, prepares directory listings, and can publish them to a compatible OneNav database.
+![ArticleFlow content workspace](docs/images/dashboard.png)
 
-The interface and documentation are primarily in Simplified Chinese. The service is intended for a trusted local computer, not direct public hosting.
+**Discover, refine, and publish content in one continuous workflow.** ArticleFlow is a free, open-source, local-first content automation workspace. It finds AI industry news and AI tools on a schedule, uses a language model to prepare content, and publishes articles to WordPress and tool listings to a OneNav-compatible directory site.
+
+ArticleFlow is created by **加密社** and made freely available so people can run and adapt it themselves. We also invite you to visit our automated AI tools directory: [123gpt.cn](https://123gpt.cn).
+
+> ArticleFlow is software that runs on your computer, not a hosted SaaS. Connection settings, task records, and collected content stay in your local data directory by default. Scheduled tasks run only while the local service is running.
+
+## Why ArticleFlow
+
+- **One flow from discovery to publishing:** reduce repetitive copy-and-paste work across collection, rewriting, and publishing tools.
+- **Automation you can control and monitor:** set separate schedules, topics, and on/off switches for articles and tool listings, with live progress and task history.
+- **Direct publishing targets:** publish successfully processed articles to WordPress and tool listings to a OneNav-compatible directory without manually syncing each item.
+- **Local-first storage:** SQLite keeps local content and task history; connection settings are encrypted in the local data directory.
+- **Traceable work:** source material, processing status, and reports help you review results and diagnose failed tasks.
+- **Free and open source:** inspect, use, and adapt the code under the MIT License in [LICENSE](LICENSE). Third-party model APIs may charge according to their providers' terms.
 
 ## Features
 
-- Discover recent AI news and articles from feeds and browser search, then review candidates and source material.
-- Rewrite content with a configured SiliconFlow-compatible chat completion API and run the included `de-ai-flavor` checks.
-- Keep source text, drafts, reports, images, and task history in a local SQLite database.
-- Publish articles and media through the WordPress REST API.
-- Find AI tools across design, video, music, automation, agents, presentations, spreadsheets, coding, and other categories.
-- Publish compatible directory listings through MySQL and SFTP.
-- Configure independent interval-based automations for article and tool discovery, with enable/disable controls and live task progress.
+### AI news collection and article publishing
+
+- Discover article candidates from feeds and browser search, then review their sources and original text.
+- Follow AI industry news, generative AI, language models, agents, AI coding, products, and applications; edit the topics to suit your needs.
+- Use a SiliconFlow-compatible model API to organize and rewrite content, then run the included `de-ai-flavor` checks.
+- Review source text, generated content, images, keywords, task status, and publishing results in the article library.
+- With WordPress configured, automatically publish successfully processed articles with the published status.
+
+### AI tool discovery and directory publishing
+
+- Discover AI products in areas such as design and image generation, video, music, automation, agents, presentations, spreadsheets, writing, and coding.
+- Capture official-site information, prepare descriptions, categories, and tags, and track processing results.
+- With a compatible OneNav MySQL database and SFTP image upload configured, write and publish listings to the directory site automatically.
+- Search and filter listings, inspect the target site structure, and review batch publishing status.
+
+### Scheduled automation
+
+- Configure article and AI tool discovery independently.
+- Set the run interval, items per round, and topic list.
+- Turn each task on or off with a clear switch. Enabling starts a run immediately; later runs follow the configured interval.
+- See in-progress, completed, and partially failed states, progress, last run, and next scheduled run.
+- Inspect task logs and failure details in the collection task page and retry when needed.
+
+## How it works
+
+### Article workflow
+
+```text
+Scheduled search → discover candidate articles and sources → AI refinement/rewrite → content checks → save locally → publish to WordPress
+```
+
+Once the connections and topics are configured, automation runs on the selected interval. Successfully processed articles can be sent to WordPress directly as published posts. Failures appear in task status and logs for review and retry.
+
+### AI tool directory workflow
+
+```text
+Scheduled AI tool search → visit and capture official sites → prepare name, description, and category → validate listing → publish to directory database
+```
+
+ArticleFlow discovers tools by topic, processes official-site information, and prepares directory entries. Once MySQL and SFTP are configured, successful listings are published automatically to a OneNav-compatible site.
 
 ## Requirements
 
-- Python 3.11 or newer
-- Node.js and npm, for the `de-ai-flavor` CLI
-- Chromium installed through Playwright
-- Optional external services: a SiliconFlow-compatible API, WordPress, and MySQL/SFTP for directory publishing
+- Windows 10/11 (a PowerShell launcher is included); other systems can start the Python service manually.
+- Python 3.11 or newer.
+- Node.js and npm for the `de-ai-flavor` writing-check CLI.
+- Chromium installed through Playwright.
+- **A SiliconFlow API key is required for article rewriting.** Register and create an API key at [SiliconFlow](https://cloud.siliconflow.cn/i/ROspRzwK). Enter the key in ArticleFlow's **连接设置** (Connection Settings); do not put it in source code or commit it to GitHub. Model/API availability and charges are subject to SiliconFlow's current terms.
+- WordPress with an application password and permissions to create posts and media for article publishing.
+- A OneNav-compatible MySQL database and working SFTP image upload settings for AI directory publishing.
 
 ## Quick start
 
-On Windows, run `start.ps1` from PowerShell. The script creates `.venv`, installs Python dependencies, and starts the local web app at `http://127.0.0.1:8000`.
+Clone the repository, then run in Windows PowerShell:
 
-For a manual setup:
+```powershell
+git clone https://github.com/Boom-Caoq/articleflow.git
+cd articleflow
+.\start.ps1
+```
+
+On first launch, the script creates a Python virtual environment, installs dependencies, and starts the local service. Open the address printed in the terminal (default: `http://127.0.0.1:8000`).
+
+To install and start manually:
 
 ```powershell
 python -m venv .venv
@@ -36,57 +93,61 @@ python -m venv .venv
 .venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Install the writing CLI if it is not already available:
+Install the `de-ai-flavor` CLI if it is not already available:
 
 ```sh
 npm install -g de-ai-flavor
 ```
 
-Use a single Uvicorn worker. The queues and scheduler are process-local and SQLite is configured for a single local service instance.
+Use a single Uvicorn worker. The task queue and scheduler are process-local, and SQLite is configured for a single local service instance.
 
-## Configure connections
+## First-time setup
 
-Open **连接设置** in the app and enter credentials there. The app encrypts saved connection settings on the local machine. Credentials are not read from this README or required in source files.
+1. Start ArticleFlow and open **连接设置** (Connection Settings).
+2. Enter your SiliconFlow API key and check the model connection. This is required for article rewriting.
+3. To publish articles, configure your WordPress HTTPS URL, username, and application password, then check the connection.
+4. To publish AI tool listings, configure the target MySQL database and SFTP image upload, then inspect the directory schema.
+5. In **自动化任务** (Automations), set article and tool topics, intervals, and items per run.
+6. Turn on the tasks you want and monitor live progress. Keep the local service running for scheduled runs.
 
-- **Article generation:** configure the model API key.
-- **Article publishing:** configure an HTTPS WordPress URL, username, and application password.
-- **AI directory publishing:** configure the MySQL connection and SFTP image-upload settings, then inspect the target site's schema before publishing.
+Enter credentials only through the app's local connection settings. Never put real API keys, WordPress passwords, database connection details, SFTP host/user/password values, or private keys in source code, screenshots, issues, or public documentation.
 
-Run each connection check before enabling the corresponding workflow. Use a WordPress account with the required post and media permissions. The directory publisher writes to a OneNav-compatible schema directly; test with a non-production database before using it on a live site.
+## Local data and security
 
-## Automations
+- `data/` stores the local SQLite database, encryption key, connection settings, logs, images, and processing records. It is excluded by `.gitignore`.
+- The encryption key and encrypted settings are on the same computer. Restrict local account access and back up `data/` securely; anyone who obtains both files may recover the credentials.
+- The app has no user login. The service binds to `127.0.0.1` and checks local origins. **Do not expose it directly to the public internet.**
+- Collection follows `robots.txt` and does not bypass logins, CAPTCHAs, or other access controls. Follow source-site terms, copyright, and applicable laws, and make sure you have rights to republish material.
+- Search results are discovery leads, not fact checks. Review sources, claims, rewrite quality, and image rights before publishing.
+- Directory records are written directly to the database. This does not run WordPress hooks or automatically clear site/CDN caches; test on a staging site before production use.
+- Scheduled tasks pause when the local service stops. Check interrupted task status after restarting.
+- If a credential was committed to Git history, rotate it and clean the history. Removing it only from the latest files does not invalidate the old credential.
 
-The **自动化任务** page has separate schedules for articles and AI tool listings. Set an interval in minutes, edit the topic list (one topic per line), and switch each automation on or off. The first run starts immediately after enabling; later runs follow the configured interval. The local service must remain running for schedules to execute.
+## Screenshots
 
-Automated articles are rewritten and checked before being published to WordPress. Directory listings are published only after the official site has been captured and the listing passes validation. Review model-generated content and verify that you have permission to republish source material.
+| Content workspace | Collection task progress |
+| --- | --- |
+| ![Content workspace](docs/images/dashboard.png) | ![Collection tasks](docs/images/collection-tasks.png) |
 
-## Data and secrets
+| Automations | Article library |
+| --- | --- |
+| ![Automation settings](docs/images/automations.png) | ![Article library](docs/images/articles.png) |
 
-Runtime data is stored in `data/`, including the SQLite database, local encryption key, logs, generated images, and processing artifacts. Keep this directory private and out of source control. The `.gitignore` excludes it and other local runtime files.
-
-The encryption key and encrypted settings are stored on the same machine. This protects against accidental disclosure in the UI; it does not protect credentials if someone obtains both files. Back up `data/` securely if you need to preserve local settings and history.
-
-Before publishing a fork, check the full commit history and repository settings for credentials. If a credential was ever committed, remove it from history and rotate it with the provider; deleting it from the latest version alone does not make the old value safe.
-
-## Safety and limitations
-
-- The server binds to `127.0.0.1` and includes a local-origin check. It has no user login and should not be exposed directly to the public internet.
-- Collection follows `robots.txt` and does not bypass login pages, CAPTCHAs, or other access controls.
-- Search results are discovery leads, not fact verification. Generated content should be reviewed before publication.
-- Direct database publishing does not run WordPress hooks or automatically clear site/CDN caches.
-- Automation pauses when the local service is stopped; interrupted work may need a retry after restart.
+| AI tools directory and publishing |
+| --- |
+| ![AI tools directory](docs/images/navigation.png) |
 
 ## Development
-
-Install the development dependencies and run the test suite:
 
 ```sh
 python -m pip install -r requirements.txt
 python -m pytest -q
 ```
 
-Do not commit `.venv/`, `data/`, local environment files, logs, credentials, or database dumps.
+Before committing, make sure `.venv/`, `data/`, local environment files, logs, database backups, and real credentials are excluded. Review the full Git history before making a repository public.
 
-## License
+## License and acknowledgements
 
-Add the license you intend to use before publishing this repository. Review the license and attribution requirements for bundled dependencies and the `skills/de-ai-flavor` directory.
+ArticleFlow is open source under the MIT License, with **加密社** as the copyright holder. Read [LICENSE](LICENSE) for the terms. Third-party libraries, models, and services retain their own licenses and terms.
+
+If ArticleFlow is useful to your workflow, visit [123gpt.cn, our automated AI tools directory](https://123gpt.cn) to discover more tools.
