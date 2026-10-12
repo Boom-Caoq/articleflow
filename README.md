@@ -127,16 +127,21 @@ npm install -g de-ai-flavor
 ## 截图
 
 | 内容工作台 | 采集任务进度 |
-| --- | --- |
-| ![内容工作台](docs/images/dashboard.png) | ![采集任务列表](docs/images/collection-tasks.png) |
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/027f8cec-46a4-4a84-afb0-2d88fe08d265" />
+
+
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/df2dc1e4-4777-471b-ac04-b245192f4968" />
 
 | 自动化任务 | 文章库 |
-| --- | --- |
-| ![自动化任务设置](docs/images/automations.png) | ![文章库](docs/images/articles.png) |
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/38b20f80-797b-4bb4-af96-8ba8409ac501" />
+
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/32c04c53-e901-4590-9f12-83c4c1393cc5" />
+
 
 | AI 工具导航与发布 |
-| --- |
-| ![AI 工具导航](docs/images/navigation.png) |
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/dbaee8a0-4956-464b-84e8-ef3bb0f01826" />
+
+<img width="1910" height="1035" alt="image" src="https://github.com/user-attachments/assets/2c8e9a9f-c574-4a71-8cb7-66172a7f3c94" />
 
 ## 开发
 
