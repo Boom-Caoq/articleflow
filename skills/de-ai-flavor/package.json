@@ -1,0 +1,68 @@
+{
+  "name": "de-ai-flavor",
+  "version": "1.0.0",
+  "description": "去AI味文本改写技能。把 AI 生成的文本重写为自然的人类写作风格，提供 SKILL.md 工作流 + CLI 校验工具，可用于 Cursor / Codex 等 AI 编程工具。",
+  "main": "scripts/validate.js",
+  "bin": {
+    "de-ai-flavor": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "node scripts/validate.js",
+    "validate": "node scripts/validate.js",
+    "cli": "node bin/cli.js"
+  },
+  "keywords": [
+    "ai-detection",
+    "ai-detector",
+    "text-rewriting",
+    "humanize",
+    "de-ai-flavor",
+    "writing",
+    "nlp",
+    "cursor-skill",
+    "codex-skill",
+    "agent-skill",
+    "chinese-nlp",
+    "ai-text",
+    "human-writing",
+    "去除ai味",
+    "文本改写",
+    "AI文本检测"
+  ],
+  "author": {
+    "name": "de-ai-flavor contributors",
+    "url": "https://github.com/Boom-Caoq/de-ai-flavor"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Boom-Caoq/de-ai-flavor#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Boom-Caoq/de-ai-flavor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Boom-Caoq/de-ai-flavor/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "SKILL.md",
+    "reference.md",
+    "config.json",
+    "scripts/",
+    "bin/",
+    "README.md",
+    "PUBLISH.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "cursor": {
+    "skill": {
+      "name": "de-ai-flavor",
+      "description": "去AI味文本改写技能。把AI生成的文本重写为自然的人类写作风格。",
+      "entry": "SKILL.md"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

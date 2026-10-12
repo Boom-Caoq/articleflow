@@ -1,0 +1,159 @@
+{
+  "meta": {
+    "version": "1.0",
+    "description": "de-ai-flavor 配置文件。用户可按需调整各项参数，AI 会根据配置生成对应风格的改写结果。"
+  },
+
+  "persona": {
+    "description": "改写后的文本要像谁在说话",
+    "value": "靠谱朋友",
+    "options": [
+      "靠谱朋友",
+      "技术博主",
+      "论坛老手",
+      "资深用户",
+      "职场前辈"
+    ],
+    "notes": {
+      "靠谱朋友": "说话实用、有经验、不飘、不灌水。适合技术文档、知识分享。",
+      "技术博主": "有条理、有深度，但不失亲和感。适合博客、公众号风格。",
+      "论坛老手": "经验十足、偶尔吐槽、不废话。适合 Reddit、V2EX、知乎风格。",
+      "资深用户": "稳重、有判断力、不极端。适合专业社区、中文技术论坛。",
+      "职场前辈": "有见地、有分寸、适度保守。适合职场沟通、项目文档。"
+    }
+  },
+
+  "style_level": {
+    "description": "口语化程度。数值越高越口语化。",
+    "value": 6,
+    "min": 1,
+    "max": 10,
+    "guide": {
+      "1": "几乎不口语，保持书面感，适合正式文档",
+      "3": "轻微口语，少量口头禅，适合半正式内容",
+      "5": "中等口语，语气自然，适合大多数场景（默认值）",
+      "7": "较口语化，可以吐槽，适合分享类内容",
+      "9": "非常口语，像聊天记录，不适合严肃内容"
+    }
+  },
+
+  "allow_profanity": {
+    "description": "是否允许脏话和极端表达",
+    "value": false,
+    "notes": "开启后允许使用'破玩意儿'、'坑爹'等词汇。关闭后只用'说实话'、'基本上'等温和口语。"
+  },
+
+  "allow_humor": {
+    "description": "是否允许幽默、吐槽、自嘲",
+    "value": true,
+    "notes": "开启后允许夸张、吐槽、自嘲。关闭后语气更克制。"
+  },
+
+  "allow_interruptions": {
+    "description": "是否允许突然换话题、自我打断",
+    "value": false,
+    "notes": "开启后允许'等等我跑题了'、'不对，刚才说到哪了'等跳跃感。"
+  },
+
+  "personal_experience": {
+    "description": "个人经历密度",
+    "value": "some",
+    "options": ["none", "few", "some", "rich"],
+    "guide": {
+      "none": "不加入任何个人经历，纯干货",
+      "few": "加入 1 处个人经历点缀",
+      "some": "加入 1-2 处个人经历，有凭据（默认）",
+      "rich": "加入多处个人经历，故事感强"
+    }
+  },
+
+  "length_control": {
+    "description": "改写后长度控制",
+    "value": "preserve",
+    "options": ["preserve", "expand", "condense"],
+    "guide": {
+      "preserve": "保持原文长度，不缩减（默认）",
+      "expand": "允许适度扩展，补充细节",
+      "condense": "允许适度精简，去除冗余"
+    }
+  },
+
+  "data_precision": {
+    "description": "数据表述精确度",
+    "value": "fuzzy",
+    "options": ["exact", "fuzzy"],
+    "guide": {
+      "exact": "保持原文精确数据（如'50%'、'3.2.0'）",
+      "fuzzy": "数据模糊化（如'大概一半'、'最新版'）（默认）"
+    }
+  },
+
+  "max_revision_iterations": {
+    "description": "最多修订轮数。达到后强制输出当前版本。",
+    "value": 3,
+    "min": 1,
+    "max": 5
+  },
+
+  "ban_words": {
+    "description": "额外禁用词（追加到内置禁用词表）",
+    "value": [],
+    "example": ["例：落地", "例：抓手", "例：闭环"]
+  },
+
+  "output_format": {
+    "description": "输出格式",
+    "value": "plain",
+    "options": ["plain", "markdown"],
+    "guide": {
+      "plain": "纯文本，无格式标记",
+      "markdown": "Markdown 格式，包含元信息"
+    }
+  },
+
+  "preset_profiles": {
+    "description": "快捷预设配置。可直接引用 preset_profile 字段使用预设。",
+    "profiles": {
+      "标准知识分享": {
+        "persona": "靠谱朋友",
+        "style_level": 5,
+        "allow_profanity": false,
+        "allow_humor": true,
+        "allow_interruptions": false,
+        "personal_experience": "some",
+        "length_control": "preserve",
+        "data_precision": "fuzzy"
+      },
+      "技术博客": {
+        "persona": "技术博主",
+        "style_level": 4,
+        "allow_profanity": false,
+        "allow_humor": true,
+        "allow_interruptions": false,
+        "personal_experience": "some",
+        "length_control": "preserve",
+        "data_precision": "exact"
+      },
+      "论坛问答": {
+        "persona": "论坛老手",
+        "style_level": 7,
+        "allow_profanity": false,
+        "allow_humor": true,
+        "allow_interruptions": true,
+        "personal_experience": "rich",
+        "length_control": "preserve",
+        "data_precision": "fuzzy"
+      },
+      "职场沟通": {
+        "persona": "职场前辈",
+        "style_level": 3,
+        "allow_profanity": false,
+        "allow_humor": false,
+        "allow_interruptions": false,
+        "personal_experience": "few",
+        "length_control": "preserve",
+        "data_precision": "exact"
+      }
+    }
+  }
+}
