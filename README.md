@@ -2,7 +2,8 @@
 
 **简体中文** · [English](README.en.md)
 
-![ArticleFlow 内容工作台](docs/images/dashboard.png)
+<img width="2550" height="1275" alt="image" src="https://github.com/user-attachments/assets/bbc76086-87f9-4a22-9a88-aff53f56d2a1" />
+
 
 **让内容发现、整理、改写和发布自动流转。** ArticleFlow 是一个免费开源、本地优先的内容自动化工作台：定时发现 AI 行业资讯与 AI 工具，借助大语言模型整理内容，并将文章发布到 WordPress、将工具网址发布到兼容 OneNav 的导航站点。
 
