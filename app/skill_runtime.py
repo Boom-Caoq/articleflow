@@ -1,4 +1,4 @@
-"""Run the globally installed npm package, never a simulated validator."""
+"""Run the locally installed de-ai-flavor package, never a simulated validator."""
 import json
 import os
 import shutil
@@ -23,7 +23,7 @@ def info():
     try:
         p=package_dir()
         version=json.loads((p/'package.json').read_text(encoding='utf-8'))['version']
-        return dict(installed=True,version=version,engine='npm CLI',path=str(p))
+        return dict(installed=True,version=version,engine='本地 npm CLI',path=str(p))
     except ValueError as e:
         return dict(installed=False,message=str(e))
 
@@ -31,7 +31,7 @@ def validate(text):
     path=package_dir()
     node=shutil.which('node')
     if not node:
-        raise ValueError('未找到 Node.js，无法执行 npm skill')
+        raise ValueError('未找到 Node.js，无法执行本地质检')
     with tempfile.TemporaryDirectory(prefix='articleflow-skill-') as directory:
         source=Path(directory)/'article.txt'
         source.write_text(text,encoding='utf-8')

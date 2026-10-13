@@ -56,12 +56,49 @@ def test_discovery_only_does_not_call_model(tmp_path,monkeypatch):
         jid=c.execute('INSERT INTO jobs(name,config) VALUES(?,?)',('test',json.dumps(cfg))).lastrowid
     asyncio.run(core.run_job(jid))
     with core.db() as c:
-        assert c.execute('SELECT status FROM jobs').fetchone()[0]=='completed'
+        assert c.execute('SELECT status FROM jobs').fetchone()[0]=='partial'
         assert c.execute('SELECT COUNT(*) FROM articles').fetchone()[0]==1
         article=c.execute('SELECT * FROM articles').fetchone()
         assert article['status']=='collected'
         assert json.loads(article['original'])['text']=='full text'
         assert json.loads(c.execute('SELECT value FROM discoveries').fetchone()[0])[0]['status']=='selected'
+
+def test_failed_automated_articles_do_not_consume_limit(tmp_path,monkeypatch):
+    from app import pipeline
+    monkeypatch.setattr(core,'DATA',tmp_path)
+    (tmp_path/'media').mkdir()
+    core.init()
+    core.save_settings({'api_key':'test-key','wp_url':'https://example.com','wp_user':'user','wp_password':'password'})
+    calls=[]
+    async def public(url): return url
+    async def crawl(url): return '<html></html>',url
+    async def generate(jid,original,cfg,progress=None):
+        return dict(title='测试',content_html='<p>正文</p>',excerpt='摘要',tags=[],categories=[]),dict(verdict='pass',content_preserved=True)
+    async def media(original,url): return []
+    original_advance=pipeline.advance
+    async def advance(aid,sync_after=False,capture_only=False):
+        calls.append(aid)
+        if len(calls)==1:
+            pipeline.mark(aid,'rewrite_failed','模拟失败')
+            return {'status':'rewrite_failed'}
+        pipeline.mark(aid,'synced','已同步至 WordPress')
+        return {'status':'synced'}
+    async def sleep(*args): pass
+    monkeypatch.setattr(core,'public_url',public)
+    monkeypatch.setattr(core,'crawl',crawl)
+    monkeypatch.setattr(core,'extract',lambda *args:dict(title='原文',text='正文',images=[]))
+    monkeypatch.setattr(core,'generate',generate)
+    monkeypatch.setattr(core,'media_files',media)
+    monkeypatch.setattr(core.asyncio,'sleep',sleep)
+    monkeypatch.setattr(pipeline,'advance',advance)
+    with core.db() as c:
+        jid=c.execute('INSERT INTO jobs(name,config,created) VALUES(?,?,0)',('自动文章',json.dumps(dict(urls=['https://example.com/a','https://example.com/b'],mode='articles',selector='',limit=1,seo=[],geo=[],automated_publish=True)))).lastrowid
+    asyncio.run(core.run_job(jid))
+    with core.db() as c:
+        assert calls==[1,2]
+        assert c.execute('SELECT status FROM articles WHERE id=1').fetchone()[0]=='rewrite_failed'
+        assert c.execute('SELECT status FROM articles WHERE id=2').fetchone()[0]=='synced'
+        assert c.execute('SELECT status FROM jobs').fetchone()[0]=='completed'
 
 def test_automatic_default_and_manual_validation(tmp_path,monkeypatch):
     monkeypatch.setattr(core,'DATA',tmp_path)

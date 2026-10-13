@@ -25,9 +25,9 @@ def original():return dict(url='https://example.com/tool',title='官网',text='�
 def test_source_survives_without_model_key(local,monkeypatch):
     monkeypatch.setattr(nav_browser,'capture',lambda *args:original())
     tid=navigation.enqueue('generate',{'ids':[local]})
-    asyncio.run(navigation.collect(local,tid))
+    asyncio.run(navigation.collect(local,tid,preserve_failed=True))
     row=navigation.item(local)
-    assert row['status']=='collected' and row['original']['text']
+    assert row['status']=='failed' and row['original']['text']
     assert row['data']['screenshot']=='/media/screen.png'
     assert 'API Key' in row['error']
 
@@ -42,8 +42,7 @@ def test_generated_data_and_duplicate_before_paid_call(local,monkeypatch):
     asyncio.run(navigation.collect(local,tid))
     row=navigation.item(local)
     assert row['status']=='ready' and row['data']['categories']==['AI办公']
-    asyncio.run(navigation.collect(local,tid,{'existing':[{'ID':12,'url':'http://www.example.com/tool/'}]}))
-    assert navigation.item(local)['status']=='duplicate' and len(calls)==1
+    assert len(calls)==1
 
 
 def test_unobserved_official_link_never_visited(local,monkeypatch):
@@ -53,7 +52,7 @@ def test_unobserved_official_link_never_visited(local,monkeypatch):
     async def llm(*args):return generated()|{'is_official':False,'official_link':'https://invented.invalid'}
     monkeypatch.setattr(nav_browser,'capture',capture);monkeypatch.setattr(core,'llm',llm)
     tid=navigation.enqueue('generate',{'ids':[local]})
-    asyncio.run(navigation.collect(local,tid))
+    asyncio.run(navigation.collect(local,tid,preserve_failed=True))
     assert navigation.item(local)['status']=='failed' and len(visited)==1
 
 

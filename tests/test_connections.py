@@ -49,6 +49,6 @@ def test_cannot_bypass_detection(isolated):
 def test_real_installed_npm_cli():
     report=skill_runtime.validate('首先，我们需要理解这个问题。其次，我会检查数据。最后，我们再决定怎么做。')
     assert report['engine']['installed']
-    assert report['engine']['engine']=='npm CLI'
+    assert report['engine']['engine']=='本地 npm CLI'
     assert report['checks']['ban_list']['found']
     assert report['summary']['passed'] is False

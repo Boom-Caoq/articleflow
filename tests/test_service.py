@@ -65,6 +65,28 @@ def test_pipeline_persists_article_and_deduplicates(isolated,monkeypatch):
         assert c.execute('SELECT COUNT(*) FROM articles').fetchone()[0]==1
         row=c.execute('SELECT * FROM articles').fetchone()
         assert json.loads(row['keywords'])==[dict(word='Python',count=1)]
+        assert c.execute('SELECT status FROM jobs').fetchone()[0]=='partial'
+
+def test_duplicate_sources_do_not_consume_limit(isolated,monkeypatch):
+    core.save_settings({'api_key':'test-key'})
+    async def public(url): return url
+    async def crawl(url): return '<html></html>',url
+    async def generate(jid,original,cfg,progress=None):
+        return dict(title=f'测试-{original["title"]}',content_html=f'<p>{original["text"]}</p>',excerpt='摘要',tags=[],categories=[]),dict(verdict='pass',content_preserved=True)
+    async def media(original,url): return []
+    async def sleep(*args): pass
+    monkeypatch.setattr(core,'public_url',public)
+    monkeypatch.setattr(core,'crawl',crawl)
+    monkeypatch.setattr(core,'extract',lambda *args:dict(title='原文',text='正文',images=[]))
+    monkeypatch.setattr(core,'generate',generate)
+    monkeypatch.setattr(core,'media_files',media)
+    monkeypatch.setattr(core.asyncio,'sleep',sleep)
+    with core.db() as c:
+        c.execute("INSERT INTO articles(source,status) VALUES('https://example.com/a','ready')")
+        jid=c.execute('INSERT INTO jobs(name,config,created) VALUES(?,?,0)',('任务',json.dumps(dict(urls=['https://example.com/a','https://example.com/b','https://example.com/c'],mode='articles',selector='',limit=2,seo=[],geo=[])))).lastrowid
+    asyncio.run(core.run_job(jid))
+    with core.db() as c:
+        assert c.execute('SELECT COUNT(*) FROM articles').fetchone()[0]==3
         assert c.execute('SELECT status FROM jobs').fetchone()[0]=='completed'
 
 def test_quality_gate_refuses_failed_article(isolated,monkeypatch):

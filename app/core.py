@@ -5,6 +5,7 @@ import io
 import ipaddress
 import json
 import os
+import re
 import socket
 import sqlite3
 import time
@@ -159,14 +160,39 @@ def extract(raw, url):
         raise ValueError('正文超过 45000 字，请拆分后采集，避免静默截断')
     title = soup.find('h1') or soup.title
     images = []
-    cover = soup.find('meta', property='og:image')
-    if cover and cover.get('content'):
-        images.append(urljoin(url, cover['content']))
-    for img in (soup.find('article') or soup.find('main') or soup).find_all('img'):
-        src = img.get('data-src') or img.get('src')
-        if src and not src.startswith('data:'):
-            images.append(urljoin(url, src))
-    return dict(title=title.get_text(' ',strip=True) if title else '未命名文章', text=text, images=list(dict.fromkeys(images))[:12])
+    for meta in soup.select('meta[property="og:image"], meta[property="og:image:url"], meta[name="twitter:image"], meta[property="twitter:image"], meta[itemprop="image"]'):
+        if meta.get('content'):images.append(meta['content'])
+    for link in soup.select('link[rel="image_src"][href]'):images.append(link['href'])
+
+    def srcset_url(value):
+        candidates=[]
+        for part in (value or '').split(','):
+            bits=part.strip().split()
+            if not bits:continue
+            width=0
+            if len(bits)>1:
+                match=re.match(r'(\d+)(?:w|x)$',bits[1])
+                if match:width=int(match.group(1))
+            candidates.append((width,bits[0]))
+        return max(candidates,default=(0,''))[1]
+
+    content=soup.find('article') or soup.find('main') or soup.select_one('.entry-content,.post-content,[itemprop="articleBody"]') or soup
+    for img in content.find_all(['img','source']):
+        for attr in ('data-src','data-original','data-lazy-src','data-actualsrc','src'):
+            value=img.get(attr)
+            if value:images.append(value)
+        value=srcset_url(img.get('srcset') or img.get('data-srcset'))
+        if value:images.append(value)
+        parent=img.parent
+        if parent and parent.name=='picture':
+            for source in parent.find_all('source'):
+                value=srcset_url(source.get('srcset') or source.get('data-srcset'))
+                if value:images.append(value)
+    normalized=[]
+    for value in images:
+        value=urljoin(url,str(value).strip())
+        if urlsplit(value).scheme in ('http','https') and value not in normalized:normalized.append(value)
+    return dict(title=title.get_text(' ',strip=True) if title else '未命名文章', text=text, images=normalized[:12])
 
 async def llm(system, payload):
     s = settings()
@@ -202,8 +228,8 @@ async def generate(jid, original, config, progress=None):
     history=[]
     for attempt in range(rounds+1):
         update_job(jid, f'编辑质检 · 第 {attempt+1} 轮')
-        update_job(jid, f'执行 npm de-ai-flavor CLI · 第 {attempt+1} 轮')
-        if progress:progress(f'正在执行 npm de-ai-flavor CLI · 第 {attempt+1} 轮')
+        update_job(jid, f'本地 de-ai-flavor 质检 · 第 {attempt+1} 轮')
+        if progress:progress(f'正在执行本地 de-ai-flavor 质检 · 第 {attempt+1} 轮')
         cli_report=await asyncio.to_thread(skill_runtime.validate,BeautifulSoup(draft.get('content_html',''),'html.parser').get_text(' ',strip=True))
         if progress:progress(f'模型复核事实与 Skill 质检结果 · 第 {attempt+1} 轮')
         report = await llm('检查原文与成稿的完整性、事实、精确数据、引用及自然表达，并结合 npm 质检结果。输出 JSON: verdict(pass/revise), content_preserved(boolean), improvements(字符串数组)。个人视角不足不能通过虚构经历来修复；原文没有第一人称时允许忽略此项。',dict(original=original['text'], draft=draft,npm_validation=cli_report))
@@ -265,6 +291,7 @@ async def run_job(jid):
         cfg = json.loads(c.execute('SELECT config FROM jobs WHERE id=?',(jid,)).fetchone()[0])
     update_job(jid,'正在分析采集来源',2,'running')
     failures=0
+    successful=0
     from . import pipeline
     try:
         urls=cfg['urls']
@@ -284,39 +311,67 @@ async def run_job(jid):
             raw, base = await crawl(urls[0])
             soup=BeautifulSoup(raw,'html.parser')
             links=soup.select(cfg['selector'] or 'article a[href], main h2 a[href], h2.entry-title a[href]')
-            urls=list(dict.fromkeys(urljoin(base,a.get('href','')).split('#')[0] for a in links if a.get('href') and urlsplit(urljoin(base,a['href'])).netloc==urlsplit(base).netloc))[:cfg['limit']]
+            urls=list(dict.fromkeys(urljoin(base,a.get('href','')).split('#')[0] for a in links if a.get('href') and urlsplit(urljoin(base,a['href'])).netloc==urlsplit(base).netloc))
             if not urls:
                 raise ValueError('没有发现文章链接，请调整 CSS 选择器或使用文章 URL 模式')
-        for i,url in enumerate(urls[:cfg['limit']]):
+        async def process_article(url,index,selection=None):
+            nonlocal failures,successful
             try:
                 url=await public_url(url)
                 with db() as c:
                     exists=c.execute('SELECT id,status FROM articles WHERE source=?',(url,)).fetchone()
                 if exists:
-                    aid=exists['id']
-                    update_job(jid,f'继续处理文章库中的文章 {i+1}')
-                    if cfg.get('automated_publish'):
-                        with db() as c:c.execute("UPDATE articles SET pipeline_config=json_set(pipeline_config,'$.automated_publish',true) WHERE id=?",(aid,))
+                    update_job(jid,f'跳过重复文章 {index}')
+                    return False
+                update_job(jid,f'采集中 · {index}/{min(len(urls),cfg["limit"])}',12+int(index/len(urls)*38))
+                if url in discovered:
+                    selection,original,final=discovered[url]
                 else:
-                    update_job(jid,f'采集中 · {i+1}/{min(len(urls),cfg["limit"])}',int(i/len(urls)*45)+5)
-                    if url in discovered:
-                        selection,original,final=discovered[url]
-                    else:
-                        raw,final=await crawl(url)
-                        original=extract(raw,final)
-                        original['source_url']=final
-                    article_cfg=dict(cfg)
-                    if cfg.get('automated_publish'):article_cfg['automated_publish']=True
-                    aid=pipeline.save_source(jid,url,original,article_cfg,discovered[url][0] if url in discovered else None)
+                    raw,final=await crawl(url)
+                    original=extract(raw,final)
+                    original['source_url']=final
+                article_cfg=dict(cfg)
+                if cfg.get('automated_publish'):article_cfg['automated_publish']=True
+                aid=pipeline.save_source(jid,url,original,article_cfg,None)
                 result=await pipeline.advance(aid,sync_after=settings()['auto_sync'] or cfg.get('automated_publish',False),capture_only=cfg.get('discover_only',False))
-                if result['status'] in ('rewrite_failed','sync_failed'):
+                if result['status'] in ('rewrite_failed','sync_failed') or (cfg.get('automated_publish') and result['status']!='synced'):
                     failures+=1
-                update_job(jid,f'文章已入库 · 当前状态：{result["status"]}',50+int((i+1)/len(urls)*45))
+                    with db() as c:row=c.execute('SELECT stage,error FROM articles WHERE id=?',(aid,)).fetchone()
+                    update_job(jid,f'第 {index} 篇失败 · {result["status"]}：{(row["error"] or row["stage"] or "未完成").strip()}')
+                    return False
+                successful+=1
+                update_job(jid,f'文章已入库 · 当前状态：{result["status"]}',50+int(index/len(urls)*45))
                 await asyncio.sleep(1)
+                return True
             except Exception as e:
                 failures+=1
-                update_job(jid,f'第 {i+1} 篇失败：{safe_error(e)}')
-        update_job(jid,f'处理结束 · {failures} 篇失败',100,'partial' if failures else 'completed')
+                update_job(jid,f'第 {index} 篇失败：{safe_error(e)}')
+                return False
+
+        index=0
+        for url in list(urls):
+            if successful>=cfg['limit']:break
+            index+=1
+            await process_article(url,index)
+        if cfg.get('automated_publish') and cfg['mode']=='discover':
+            for round_number in range(2,4):
+                if successful>=cfg['limit']:break
+                remaining=cfg['limit']-successful
+                update_job(jid,f'第 {round_number} 轮补采，目标还差 {remaining} 篇',10)
+                retry_cfg=dict(cfg,limit=remaining,candidate_limit=max(int(cfg.get('candidate_limit',15)),remaining*3))
+                selected=await asyncio.to_thread(discovery.run,jid,retry_cfg)
+                if not selected:
+                    update_job(jid,'没有新的合格候选，停止补采')
+                    break
+                round_discovered={item[0]['url']:item for item in selected}
+                discovered.update(round_discovered)
+                urls.extend(round_discovered)
+                for selection,original,final in selected:pipeline.save_source(jid,selection['url'],original,cfg,selection)
+                for url in list(round_discovered):
+                    if successful>=cfg['limit']:break
+                    index+=1
+                    await process_article(url,index,round_discovered[url])
+        update_job(jid,f'处理结束 · 成功 {successful}/{cfg["limit"]} 篇，失败 {failures} 篇',100,'partial' if successful<cfg['limit'] else 'completed')
     except Exception as e:
         update_job(jid,safe_error(e),status='failed')
 
@@ -342,15 +397,32 @@ async def sync_article(aid):
     if not base.startswith('https://'):
         raise ValueError('WordPress 凭证同步要求 HTTPS')
     with db() as c:
-        a=c.execute('SELECT * FROM articles WHERE id=?',(aid,)).fetchone()
+        row=c.execute('SELECT * FROM articles WHERE id=?',(aid,)).fetchone()
+        a=dict(row) if row else None
         if not a:
             raise ValueError('文章不存在')
-        if a['status']=='synced':
-            return dict(id=a['wp_id'],link=a['wp_url'])
         if a['status']=='syncing':
             raise ValueError('文章正在同步中')
+        pipeline_config=json.loads(a.get('pipeline_config') or '{}')
+        if pipeline_config.get('automated_publish'):
+            report=json.loads(a.get('report') or '{}')
+            if report.get('verdict')!='pass' or report.get('content_preserved') is not True:
+                raise ValueError('文章未通过内容质检，不能自动发布')
+        if a['status']=='synced' and not pipeline_config.get('automated_publish') and s['wp_status']!='publish':
+            return dict(id=a['wp_id'],link=a['wp_url'])
         c.execute("UPDATE articles SET status='syncing',error='' WHERE id=?",(aid,))
     try:
+        images=json.loads(a.get('images') or '[]')
+        if not images or any(not (DATA/'media'/Path(img.get('path','')).name).is_file() for img in images):
+            original=json.loads(a.get('original') or '{}') or {}
+            original.setdefault('title',a['title'])
+            original.setdefault('images',[])
+            images=await media_files(original,a['source'])
+            content=a['content']
+            for img in images[1:]:
+                content+=f'<figure><img src="{img["path"]}" alt="{html.escape(img["alt"],quote=True)}" loading="lazy"></figure>'
+            with db() as c:c.execute('UPDATE articles SET images=?,content=?,stage=? WHERE id=?',(json.dumps(images,ensure_ascii=False),content,'已补齐封面与正文配图',aid))
+            a['images']=json.dumps(images,ensure_ascii=False);a['content']=content
         async with httpx.AsyncClient(timeout=90,trust_env=False,auth=(s['wp_user'],s['wp_password'])) as client:
             async def call(method,path,**kwargs):
                 endpoint=base+path
@@ -362,6 +434,8 @@ async def sync_article(aid):
                     raise ValueError(f'WordPress HTTP {r.status_code}，请检查权限和 REST API 设置')
                 return r.json()
             slug='articleflow-'+hashlib.sha256(a['source'].encode()).hexdigest()[:20]
+            pipeline_config=json.loads(a.get('pipeline_config') or '{}')
+            desired_status='publish' if pipeline_config.get('automated_publish') else s['wp_status']
             existing=await call('GET','/posts',params={'slug':slug,'context':'edit','status':'draft,publish,pending,private,future'})
             if existing:
                 result=existing[0]
@@ -377,16 +451,16 @@ async def sync_article(aid):
                         terms[taxonomy].append(term['id'])
                 content=a['content']
                 featured=0
-                for img in json.loads(a['images']):
+                for img in images:
                     path=DATA/'media'/Path(img['path']).name
                     media=await call('POST','/media',content=path.read_bytes(),headers={'Content-Type':'image/jpeg','Content-Disposition':f'attachment; filename="{path.name}"'})
                     await call('POST',f'/media/{media["id"]}',json={'alt_text':img['alt']})
                     featured=featured or media['id']
                     content=content.replace(img['path'],media['source_url'])
-                result=await call('POST','/posts',json=dict(title=a['title'],content=content,excerpt=a['excerpt'],status=(a.get('pipeline_config') and json.loads(a['pipeline_config']).get('automated_publish') and 'publish') or s['wp_status'],slug=slug,featured_media=featured,**terms))
-            publish_requested=bool(a['pipeline_config'] and json.loads(a['pipeline_config']).get('automated_publish'))
-            if publish_requested and result.get('status')!='publish':
+                result=await call('POST','/posts',json=dict(title=a['title'],content=content,excerpt=a['excerpt'],status=desired_status,slug=slug,featured_media=featured,**terms))
+            if desired_status=='publish' and result.get('status')!='publish':
                 result=await call('POST',f"/posts/{result['id']}",json={'status':'publish'})
+                if result.get('status')!='publish':raise ValueError('WordPress 未确认文章已发布，请检查账户发布权限及站点审核规则')
         with db() as c:
             c.execute("UPDATE articles SET status='synced',wp_id=?,wp_url=?,error='',stage='已同步至 WordPress' WHERE id=?",(result['id'],result['link'],aid))
         return result

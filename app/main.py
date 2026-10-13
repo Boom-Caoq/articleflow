@@ -69,6 +69,11 @@ app.include_router(nav_api.router)
 async def automations():
     return automation.listing()
 
+@app.post('/api/automations/{kind}/run')
+async def run_automation(kind:str):
+    task_id=await automation.run_now(kind)
+    return {'task_id':task_id,'automations':automation.listing()}
+
 class AutomationInput(BaseModel):
     enabled:bool
     interval_minutes:int=Field(ge=5,le=525600)
@@ -83,22 +88,17 @@ async def update_automation(kind:str,value:AutomationInput):
         if config['days'] not in (1,3,7,30) or config['content_type'] not in ('all','news','tools'):raise ValueError('文章采集设置无效')
         from .discovery import SOURCES
         if any(s not in [x['url'] for x in SOURCES] for s in config['sources']):raise ValueError('行业来源无效')
-        if value.enabled:
-            s=core.settings()
-            if not all(s[k] for k in ('api_key','wp_url','wp_user','wp_password')):raise ValueError('启用文章自动发布前，请配置 API Key 和 WordPress 连接')
     elif kind=='navigation':
         config={'topic':str(config.get('topic','AI设计与绘画\nAI视频生成与剪辑\nAI音乐与音频\nAI自动化工具与智能体\nAI PPT与演示文稿\nAI Excel与数据分析\nAI写作与办公\nAI编程与开发'))[:1500],'limit':max(1,min(20,int(config.get('limit',5)))),'author':max(1,int(config.get('author',1)))}
-        if value.enabled:
-            s=core.settings()
-            if not s['api_key']:raise ValueError('启用导航自动发布前，请配置 AI API Key')
-            nav_api.nav_upload.config()
-            await asyncio.to_thread(nav_api.nav_database.inspect)
+        # Enabling is a scheduling preference. Missing external connections are
+        # reported by the run itself and retried on the next interval.
     automation.configure(kind,value.enabled,value.interval_minutes,config)
     return automation.listing()
 
 async def create_automated_job(config):
     config=dict(config)
     config['automated_publish']=True
+    config['discover_only']=False
     value=JobInput.model_validate(config)
     result=await create_job(value)
     jid=result['id']

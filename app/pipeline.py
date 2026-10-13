@@ -25,9 +25,11 @@ async def advance(aid,sync_after=False,capture_only=False):
         row=c.execute('SELECT * FROM articles WHERE id=?',(aid,)).fetchone()
         if not row:raise ValueError('文章不存在')
         a=dict(row)
-        if a['status']=='synced':return {'status':'synced'}
+        automated=bool(json.loads(a['pipeline_config'] or '{}').get('automated_publish'))
+        if automated:sync_after=True;capture_only=False
+        if a['status']=='synced' and not automated:return {'status':'synced'}
         if a['status'] in ('processing','syncing'):raise ValueError('文章正在处理中，请勿重复提交')
-        generated=a['status'] in ('ready','sync_failed','sync_uncertain')
+        generated=a['status'] in ('ready','sync_failed','sync_uncertain','synced')
         if not generated:
             c.execute("UPDATE articles SET status='processing',stage='准备原文',error='' WHERE id=?",(aid,))
     if not generated:
@@ -48,10 +50,12 @@ async def advance(aid,sync_after=False,capture_only=False):
             if draft:
                 article,report=draft['article'],draft['report']
             else:
-                mark(aid,'processing','DS V4 Flash + npm Skill 改写与质检')
+                mark(aid,'processing','DS V4 Flash + 本地 Skill 改写与质检')
                 article,report=await core.generate(a['job_id'],original,config,lambda stage:mark(aid,'processing',stage))
                 with core.db() as c:
                     c.execute('UPDATE articles SET draft=? WHERE id=?',(json.dumps({'article':article,'report':report},ensure_ascii=False),aid))
+            if report.get('verdict')!='pass' or report.get('content_preserved') is not True:
+                raise ValueError('文章质检未通过，已停止自动发布')
             previous=json.loads(a['report'] or '{}')
             if previous.get('discovery'):report['discovery']=previous['discovery']
             mark(aid,'processing','下载封面与正文配图')

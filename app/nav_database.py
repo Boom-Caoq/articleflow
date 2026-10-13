@@ -16,8 +16,14 @@ def identity(url):
         raise ValueError('请输入有效的 HTTP/HTTPS 官网链接')
     host=p.hostname.lower().removeprefix('www.')
     if p.port not in (None,80,443):host+=':'+str(p.port)
-    query=sorted((k,v) for k,v in parse_qsl(p.query) if not k.lower().startswith('utm_') and k.lower() not in ('ref','from','fbclid','gclid'))
+    tracking={'utm','ref','from','fbclid','gclid','cg_click_id','cgv','sourceid','sourcecode','fromid','channel','channelcode'}
+    query=sorted((k,v) for k,v in parse_qsl(p.query) if not k.lower().startswith('utm_') and k.lower() not in tracking)
     return urlunsplit(('',host,p.path.rstrip('/') or '/',urlencode(query),''))
+
+
+def name_identity(name):
+    """Normalize a listing name for exact, case/spacing-insensitive deduplication."""
+    return ''.join(ch.casefold() for ch in str(name or '').strip() if ch.isalnum())
 
 
 @contextmanager
@@ -106,6 +112,15 @@ def publish(item,media,author,status):
             prior=q.fetchone()
             if prior:
                 if prior['post_status']=='trash':raise ValueError('此前发布的网址已在回收站，请先在 WordPress 中处理')
+                if status=='publish' and prior['post_status']!='publish':
+                    local,gmt=wp_dates(opts)
+                    q.execute(f"UPDATE `{p}posts` SET post_status='publish',post_modified=%s,post_modified_gmt=%s WHERE ID=%s",(local,gmt,prior['ID']))
+                    q.execute(f"SELECT term_taxonomy_id FROM `{p}term_relationships` WHERE object_id=%s",(prior['ID'],))
+                    for relation in q.fetchall():
+                        tid=relation['term_taxonomy_id']
+                        q.execute(f"UPDATE `{p}term_taxonomy` SET count=(SELECT COUNT(DISTINCT r.object_id) FROM `{p}term_relationships` r JOIN `{p}posts` s ON s.ID=r.object_id WHERE r.term_taxonomy_id=%s AND s.post_status='publish') WHERE term_taxonomy_id=%s",(tid,tid))
+                    c.commit()
+                    prior['post_status']='publish'
                 return dict(id=prior['ID'],url=opts['home'].rstrip('/')+'/?post_type=sites&p='+str(prior['ID']),recovered=True,status=prior['post_status'])
             for old in existing(q,p):
                 try:duplicate=identity(old['url'])==identity(data['url'])

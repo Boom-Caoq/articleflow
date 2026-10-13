@@ -9,8 +9,9 @@ from urllib.parse import urljoin,urlsplit,parse_qs,urlencode
 from bs4 import BeautifulSoup
 from PIL import Image
 import httpx
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Error as BrowserError, TimeoutError as BrowserTimeout
 from . import core,discovery
+from . import nav_database
 from .nav_database import identity
 
 
@@ -38,7 +39,15 @@ def browser_page(block_images=False):
 def visit(page,cache,url):
     discovery.public_url_sync(url)
     if not discovery.robots_allowed(url,cache):raise ValueError('网站禁止采集或 robots.txt 暂时不可读取')
-    r=page.goto(url,wait_until='domcontentloaded',timeout=35000)
+    for attempt in range(2):
+        try:
+            r=page.goto(url,wait_until='domcontentloaded',timeout=35000)
+            break
+        except BrowserError as e:
+            code=re.search(r'net::(ERR_[A-Z_]+)',str(e))
+            reason=('访问官网超时' if isinstance(e,BrowserTimeout) else '浏览器无法访问官网')
+            if code:reason+='（'+code.group(1)+'）'
+            if attempt:raise ValueError(reason+'，已重试 1 次') from e
     if r and r.status>=400:raise ValueError(f'目标网站 HTTP {r.status}')
     try:page.wait_for_load_state('networkidle',timeout=2500)
     except Exception:pass
@@ -80,14 +89,18 @@ def download_logo(icons,site_url):
     return ''
 
 
-def discover(topic,limit,log,exclude=None):
-    found=[];seen=set(exclude or [])
+def discover(topic,limit,log,exclude=None,exclude_titles=None):
+    found=[];seen=set(exclude or []);seen_titles=set(exclude_titles or [])
     def add(url,title,source):
         if not url.startswith(('http://','https://')):return
         try:key=identity(url)
         except ValueError:return
-        if key in seen:return
-        seen.add(key);found.append({'url':url,'title':title[:300],'discovered_from':source})
+        title=title[:300]
+        name=nav_database.name_identity(title)
+        if key in seen or (name and name in seen_titles):return
+        seen.add(key)
+        if name:seen_titles.add(name)
+        found.append({'url':url,'title':title,'discovered_from':source})
     topics=[x.strip() for x in re.split(r'[,，\n;；]+',topic) if x.strip()]
     if not topics:topics=['AI工具']
     queries=[x+' AI工具 官网' for x in topics[:8]]
